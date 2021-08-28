@@ -67,10 +67,53 @@ class ScriptExecuteController extends Controller
             $memoryInGb = round( ($req->query("memorysize")+200000)/1024/1024 );
         }
 
+        $is_assigning_mac = ($project and $project->assign_mac);
+        $assigned_mac = null;
+        if ($is_assigning_mac)
+        {
+            try
+            {
+                $reservedMac = $project->reserveAssignedMac($this->serial);
+            }
+            catch (\Exception $e)
+            {
+                $msg = 'Error reserving MAC: ' . $e->getMessage();
+                /*
+                 * This throws exception and ends the request with 401
+                 * that stops RPi. It isn't that obvious looking at
+                 * board that something failed in comparision to flashing
+                 * LED when successful. Might be better to go into
+                 * `scriptexecute` and blink LEDs in a different way for
+                 * error.
+                 */
+                $this->preCMFatal($msg, $this->serial, $board);
+            }
+
+            if (is_null($reservedMac))
+            {
+                $assigned_mac = 'No MAC address available';
+                $msg = 'No MAC addresses available to assign';
+                /*
+                 * This throws exception and ends the request with 401
+                 * that stops RPi. It isn't that obvious looking at
+                 * board that something failed in comparision to flashing
+                 * LED when successful. Might be better to go into
+                 * `scriptexecute` and blink LEDs in a different way for
+                 * error.
+                 */
+                $this->preCMFatal($msg, $this->serial, $board);
+            }
+            else
+            {
+                $assigned_mac = $reservedMac;
+            }
+        }
+
         $this->cm = Cm::updateOrCreate(['serial' => $this->serial], [
             'serial' => $this->serial,
             'mac'    => $req->query('mac') ? $req->query('mac')
                         : "MAC-PARAMETER-MISSING-".$this->serial,
+            'assigned_mac' => $assigned_mac,
             'model'  => $req->query('model'),
             'memory_in_gb' => $memoryInGb,
             'storage' => $req->query('storagesize') ? $req->query('storagesize')*512 : null,
@@ -167,6 +210,7 @@ class ScriptExecuteController extends Controller
             'part1' => $part1,
             'part2' => $part2,
             'server' => $server,
+            'assigned_mac' => $assigned_mac,
             'image_url' => $image ? "http://$server/uploads/".$image->filename_on_server : null,
             'image_extension' => $image ? $image->filename_extension : null,
             'preinstall_scripts' => $preinstall_scripts,
@@ -178,6 +222,25 @@ class ScriptExecuteController extends Controller
     {
         $this->cm = Cm::where('serial', $this->serial)->firstOrFail();
         $project = $this->cm->project;
+
+        if ($project and $project->assign_mac)
+        {
+            $assigned_mac = $this->cm->assigned_mac;
+            try
+            {
+                $project->commitReservedMac($this->serial, $assigned_mac);
+            }
+            catch (\Exception $e)
+            {
+                $msg = "Error committing MAC $assigned_mac, Message: " . $e->getMessage();
+                $this->logInfo($msg, 'error');
+
+                $this->cm->assigned_mac = $assigned_mac . ' (Failed to commit)';
+                $this->cm->save();
+                return;
+            }
+        }
+
         $this->cm->provisioning_complete_at = now();
         $this->cm->temp2 = $req->query('temp');
         $this->cm->save();
@@ -225,6 +288,23 @@ class ScriptExecuteController extends Controller
             }
 
             $this->logInfo("Error during $phase. Return code $retcode. Script output:\n\n".$logfile, 'error');
+
+            $project = $this->cm->project;
+            if ($project and $project->assign_mac)
+            {
+                $assigned_mac = $this->cm->assigned_mac;
+                try
+                {
+                    $project->rollbackReservedMac($this->serial, $assigned_mac);
+                    $this->cm->assigned_mac = null;
+                }
+                catch (\Exception $e)
+                {
+                    $msg = "Error rolling back MAC $assigned_mac, Message: " . $e->getMessage();
+                    $this->logInfo($msg, 'error');
+                    $this->cm->assigned_mac = $assigned_mac . ' (Failed to rollback)';
+                }
+            }
         }
         else
         {
@@ -253,6 +333,24 @@ class ScriptExecuteController extends Controller
     }
     */
 
+    public function preCMLogInfo($msg, $serial, $provisioning_board, $loglevel = 'info')
+    {
+        Cmlog::create([
+            'cm' => $serial,
+            'board' => $provisioning_board,
+            'loglevel' => $loglevel,
+            'ip' => request()->ip(),
+            'msg' => $msg
+        ]);
+    }
+
+    public function preCMFatal($msg, $serial, $provisioning_board)
+    {
+        $this->preCMLogInfo($msg, $serial, $provisioning_board, 'error');
+        /* 500 error doesn't stop pi from retrying so lets try 401 */
+        abort(401);
+    }
+
     public function logInfo($msg, $loglevel = 'info')
     {
         Cmlog::create([
@@ -274,6 +372,7 @@ class ScriptExecuteController extends Controller
     {
         $labelsettings = $this->cm->project->label;
         $label = str_replace('$mac', $this->cm->mac, $labelsettings->template);
+        $label = str_replace('$assigned_mac', $this->cm->assigned_mac, $label);
         $label = str_replace('$serial', $this->serial, $label);
         $label = str_replace('$provisionboard', $this->cm->provisioning_board, $label);
         $tmpfile = tempnam(sys_get_temp_dir(), "label-");

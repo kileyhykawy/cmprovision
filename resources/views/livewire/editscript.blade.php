@@ -39,7 +39,7 @@
               <div class="mb-4">
                   <label for="script" class="block text-gray-700 text-sm font-bold mb-2">Script:</label>
                   <textarea wrap="off" type="text" id="script" name="script" wire:model.defer="script" class="h-48 shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"></textarea>
-                  <small>Available environment variables:<br>$SERVER $STORAGE $PART1 $PART2</small><br>
+                  <small>Available environment variables:<br>$SERVER $STORAGE $PART1 $PART2 $ASSIGNED_MAC</small><br>
                   @error('script') <span class="text-red-500">{{ $message }}</span>@enderror
               </div>
 

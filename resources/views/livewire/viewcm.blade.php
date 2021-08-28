@@ -15,6 +15,7 @@
           <tbody>
             <tr><td class="border px-4 py-2">Serial:</td><td class="border px-4 py-2">{{ $cm->serial }}</td></tr>
             <tr><td class="border px-4 py-2">MAC-address:</td><td class="border px-4 py-2">{{ $cm->mac }}</td></tr>
+            <tr><td class="border px-4 py-2">Assigned MAC address:</td><td class="border px-4 py-2">{{ ($cm->assigned_mac) ? $cm->assigned_mac : "Not assigned" }}</td></tr>
             <tr><td class="border px-4 py-2">Model:</td><td class="border px-4 py-2">{{ $cm->model }}</td></tr>
             <tr><td class="border px-4 py-2">Memory:</td><td class="border px-4 py-2">{{ $cm->memory_in_gb }} GiB</td></tr>
             <tr><td class="border px-4 py-2">Storage:</td><td class="border px-4 py-2">{{ round($cm->storage/1000/1000/1000) }} GB</td></tr>

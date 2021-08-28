@@ -97,8 +97,13 @@
                   <label class="inline-flex items-center">
                     <input type="checkbox" id="active" name="active" wire:model.defer="active" class="form-checkbox h-6 w-6 text-gray-700">
                     <span class="ml-3 text-sm">Set as active project</span>
-                  </label>
+                  </label><br>
                   @error('active') <span class="text-red-500">{{ $message }}</span>@enderror
+                  <label class="inline-flex items-center">
+                    <input type="checkbox" id="assign_mac" name="assign_mac" wire:model.defer="assign_mac" class="form-checkbox h-6 w-6 text-gray-700">
+                    <span class="ml-3 text-sm">Assign MAC address from pool</span>
+                  </label>
+                  @error('assign_mac') <span class="text-red-500">{{ $message }}</span>@enderror
               </div>     
         </div>
       </div>

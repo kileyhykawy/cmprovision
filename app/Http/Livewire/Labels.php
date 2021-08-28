@@ -106,6 +106,7 @@ class Labels extends Component
     {
         $serial = '1000000012345678';
         $label = str_replace('$mac', '11:22:33:44:55:66', $this->template);
+        $label = str_replace('$assigned_mac', 'ff:ff:ff:ff:ff:ff', $label);
         $label = str_replace('$serial', $serial, $label);
         $label = str_replace('$provisionboard', '000 (0)', $label);
         $tmpfile = tempnam(sys_get_temp_dir(), "label-");

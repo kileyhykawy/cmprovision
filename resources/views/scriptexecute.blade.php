@@ -6,6 +6,7 @@ export SERVER="{{ $server }}"
 export STORAGE="{{ $storage }}"
 export PART1="{{ $part1 }}"
 export PART2="{{ $part2 }}"
+export ASSIGNED_MAC="{{ $assigned_mac }}"
 
 # Make sure we have random entropy
 echo "{{Str::random(64)}}" >/dev/urandom

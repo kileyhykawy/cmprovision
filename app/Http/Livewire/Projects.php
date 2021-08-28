@@ -16,7 +16,7 @@ class Projects extends Component
     public $isOpen = false;
     public $active = true;
     public $projects, $activeProject;
-    public $projectid, $name, $device, $storage, $image_id, $label_id, $label_moment, $selectedScripts, $firmware, $eeprom_settings;
+    public $projectid, $name, $device, $storage, $image_id, $label_id, $label_moment, $selectedScripts, $firmware, $eeprom_settings, $assign_mac;
     public $images, $labels, $scripts, $beta_firmware, $stable_firmware;
 
     protected $rules = [
@@ -28,7 +28,8 @@ class Projects extends Component
         'firmware' => 'nullable|max:255',
         'eeprom_settings' => 'nullable|max:2024',
         'label_moment' => 'required|in:never,preinstall,postinstall',
-        'selectedScripts' => 'array'
+        'selectedScripts' => 'array',
+        'assign_mac' => 'required|boolean'      
     ];
 
     public function render()
@@ -75,6 +76,7 @@ class Projects extends Component
         $this->image_id = Image::max('id');
         $this->active = true;
         $this->eeprom_settings = "[all]\nBOOT_UART=0\nWAKE_ON_GPIO=1\nPOWER_OFF_ON_HALT=0\n\n";
+        $this->assign_mac = false;
 
         /*if (count($this->stable_firmware))
         {
@@ -104,6 +106,7 @@ class Projects extends Component
         }
         $this->firmware = $p->eeprom_firmware;
         $this->eeprom_settings = $p->eeprom_settings;
+        $this->assign_mac = $p->assign_mac;
         $this->openModal();
     }
 
@@ -119,7 +122,8 @@ class Projects extends Component
             'image_id' => $this->image_id ? $this->image_id : null,
             'label_id' => $this->label_id ? $this->label_id : null,
             'eeprom_firmware' => $this->firmware ? $this->firmware : null,
-            'eeprom_settings' => $this->eeprom_settings ? str_replace("\r", "", $this->eeprom_settings) : null
+            'eeprom_settings' => $this->eeprom_settings ? str_replace("\r", "", $this->eeprom_settings) : null,
+            'assign_mac' => $this->assign_mac
         ]);
         $project->scripts()->sync($this->selectedScripts);
 

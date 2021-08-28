@@ -8,7 +8,8 @@ use Illuminate\Database\Eloquent\Model;
 class Project extends Model
 {
     use HasFactory;
-    protected $fillable = ['name','device','storage','image_id','label_id','label_moment','eeprom_firmware','eeprom_settings'];
+    protected $fillable = ['name','device','storage','image_id','label_id','label_moment','eeprom_firmware','eeprom_settings','assign_mac'];
+    protected $casts = ['assign_mac' => 'boolean'];
 
     function image()
     {
@@ -59,4 +60,29 @@ class Project extends Model
 
         parent::delete();
     }
+
+    function reserveAssignedMac($serial)
+    {
+        if (!$this->assign_mac)
+            throw new \Exception('Assign MAC not enabled for project');
+
+        return Mac::reserveAssignedMac($this->id, $serial);
+    }
+
+    function commitReservedMac($serial, $reserved_mac)
+    {
+        if (!$this->assign_mac)
+            throw new \Exception('Assign MAC not enabled for project');
+
+        return Mac::commitReservedMac($this->id, $serial, $reserved_mac);
+    }
+
+    function rollbackReservedMac($serial, $reserved_mac)
+    {
+        if (!$this->assign_mac)
+            throw new \Exception('Assign MAC not enabled for project');
+
+        return Mac::rollbackReservedMac($this->id, $serial, $reserved_mac);
+    }
+
 }
