@@ -31,6 +31,11 @@ class Project extends Model
         return $this->hasMany(Cm::class);
     }
 
+    function macs()
+    {
+        return $this->hasMany(Mac::class);
+    }
+    
     function isActive()
     {
         return $this->id == Project::getActiveId();

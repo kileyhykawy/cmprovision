@@ -24,6 +24,12 @@
                 </div>
 
                 <div class="hidden space-x-8 sm:-my-px sm:ml-10 sm:flex">
+                    <x-jet-nav-link href="{{ route('macs') }}" :active="request()->routeIs('macs')">
+                        {{ __('MACs') }}
+                    </x-jet-nav-link>
+                </div>
+
+                <div class="hidden space-x-8 sm:-my-px sm:ml-10 sm:flex">
                     <x-jet-nav-link href="{{ route('images') }}" :active="request()->routeIs('images')">
                         {{ __('Images') }}
                     </x-jet-nav-link>
