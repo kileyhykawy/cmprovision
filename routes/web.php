@@ -11,6 +11,7 @@ use App\Http\Livewire\Firmwares;
 use App\Http\Livewire\Settings;
 use App\Http\Controllers\AddImageController;
 use App\Http\Controllers\ScriptExecuteController;
+use App\Http\Controllers\ImportMacsController;
 
 /*
 |--------------------------------------------------------------------------
@@ -34,6 +35,7 @@ Route::middleware(['auth:sanctum', 'verified'])->get('/dashboard', function () {
 
 Route::middleware(['auth:sanctum', 'verified'])->any('/cms', Cms::class)->name('cms');
 Route::middleware(['auth:sanctum', 'verified'])->any('/macs', Macs::class)->name('macs');
+Route::middleware(['auth:sanctum', 'verified'])->post('/importMacs', [ImportMacsController::class, 'store']);
 Route::middleware(['auth:sanctum', 'verified'])->any('/images', Images::class)->name('images');
 Route::middleware(['auth:sanctum', 'verified'])->post('/addImage', [AddImageController::class, 'store']);
 Route::middleware(['auth:sanctum', 'verified'])->any('/projects', Projects::class)->name('projects');

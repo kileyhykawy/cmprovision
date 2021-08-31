@@ -27,6 +27,21 @@
                   </div>
                 </div>
             @endif
+            @if ($errors->any())
+            <div class="bg-orange-100 border-l-4 border-orange-500 text-orange-700 p-4" role="alert">
+                <p>
+                <ul>
+                @foreach ($errors->all() as $error)
+                    <li>{{ $error }}</li>
+                @endforeach
+                </ul>
+                </p>
+            </div>
+            @endif            
+            <button wire:click="openImportModal()" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded my-3">Load to pool</button>
+            @if($isImportOpen)
+                @include('livewire.importmacs')
+            @endif
             <table class="table-fixed w-full">
                 <thead>
                     <tr class="bg-gray-100">
