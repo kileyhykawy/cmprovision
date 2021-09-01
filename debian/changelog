@@ -1,3 +1,9 @@
+cmprovision4 (1.1+nureva) UNRELEASED; urgency=medium
+
+  * Implement optional MAC address allocation
+
+ -- Kiley Hykawy <kiley.hykawy@gmail.com>  Mon, 30 Aug 2021 23:50:04 -0600
+
 cmprovision4 (1.0) UNRELEASED; urgency=medium
 
   * Add EEPROM firmware support.

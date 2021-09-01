@@ -11,3 +11,9 @@ Homestead.json
 Homestead.yaml
 npm-debug.log
 yarn-error.log
+# build files using debuild for deb package creation
+debian/cmprovision4
+debian/files
+debian/*.log
+debian/*.debhelper
+debian/cmprovision4.substvars
