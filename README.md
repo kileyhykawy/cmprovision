@@ -59,6 +59,15 @@ In particular note:
 * if you want to use Tailwind css styles not already used in the application run: `npm run prod` after adding the html to have the .css file rebuild with the used styles included. (alternatively can run `npm run dev` to include all styles. But will result in a large .css file, so only use that during development)
 * if you modify .blade files make sure you regenerate the cache with: `./artisan view:cache`
 
+Build Debian package
+==
+
+Steps:
+1. Ensure `debuild` is installed- Install `devscripts` package from `apt`
+2.  From the root of the project folder, run `debuild`
+
+Output .deb package goes to parent folder of root project folder.
+
 License
 ==
 
