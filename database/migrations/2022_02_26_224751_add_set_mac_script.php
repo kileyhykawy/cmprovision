@@ -24,9 +24,9 @@ class AddSetMacScript extends Migration
 set -e
 
 mkdir -p /mnt/boot
-mount -t vfat \$PART1 /mnt/boot
+mount -t vfat $PART1 /mnt/boot
 # Add newline before in case config.txt does not have one
-echo -e "\nforce_mac_address=\$ASSIGNED_MAC" >> /mnt/boot/config.txt
+echo -e "\nforce_mac_address=$ASSIGNED_MAC" >> /mnt/boot/config.txt
 umount /mnt/boot
 EOF;
 
