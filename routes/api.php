@@ -48,6 +48,21 @@ Route::middleware('auth:sanctum')->get('/cms', function (Request $request) {
     return cmsQuery($request, Cm::query())->get();
 });
 
+/*
+ * This is a beta route as we are not sure it will actually be used.
+ */
+Route::middleware('auth:sanctum')->get('/cms/by_board/latest', function (Request $request) {
+    /*
+     * Sort all CMs by most recent started timestamp so that we can pull latest
+     * for each board.
+     */
+    $sub = Cm::orderByDesc('provisioning_started_at');
+    return Cm::fromSub($sub, 'cm')
+        ->groupBy('provisioning_board')
+        ->orderBy('provisioning_board')
+        ->get();
+});
+
 Route::middleware('auth:sanctum')->get('/projects/{projectId}/cms', function (Request $request, $projectId) {
     return cmsQuery($request, Cm::where('project_id', $projectId))->get();
 });
