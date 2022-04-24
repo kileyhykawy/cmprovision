@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Database\Eloquent\Builder;
 use App\Models\Cm;
 use App\Models\Project;
 use App\Models\Firmware;
@@ -9,6 +10,26 @@ use App\Models\Image;
 use App\Models\Script;
 use App\Models\Label;
 use App\Http\Controllers\AddImageController;
+
+function cmsQuery(Request $request, Builder $query) {
+    $validatedData = $request->validate([
+        'limit' => 'integer|min:0',
+        'sort' => 'in:provisioning_started_at'
+    ]);
+
+    $limit = $validatedData['limit'] ?? null;
+    $sort = $validatedData['sort'] ?? null;
+
+    if ($limit) {
+        $query = $query->take($limit);
+    }
+    if ($sort) {
+        $query = $query->orderBy($sort);
+    }
+    $query = $query->orderBy('id');
+
+    return $query;
+}
 
 /*
 |--------------------------------------------------------------------------
@@ -24,11 +45,26 @@ use App\Http\Controllers\AddImageController;
 /* Routes to list all information of a certain group */
 
 Route::middleware('auth:sanctum')->get('/cms', function (Request $request) {
-    return Cm::orderBy('id')->get();
+    return cmsQuery($request, Cm::query())->get();
+});
+
+/*
+ * This is a beta route as we are not sure it will actually be used.
+ */
+Route::middleware('auth:sanctum')->get('/cms/by_board/latest', function (Request $request) {
+    /*
+     * Sort all CMs by most recent started timestamp so that we can pull latest
+     * for each board.
+     */
+    $sub = Cm::orderByDesc('provisioning_started_at');
+    return Cm::fromSub($sub, 'cm')
+        ->groupBy('provisioning_board')
+        ->orderBy('provisioning_board')
+        ->get();
 });
 
 Route::middleware('auth:sanctum')->get('/projects/{projectId}/cms', function (Request $request, $projectId) {
-    return Cm::where('project_id', $projectId)->orderBy('id')->get()->toJson();
+    return cmsQuery($request, Cm::where('project_id', $projectId))->get();
 });
 
 Route::middleware('auth:sanctum')->get('/projects', function (Request $request) {
@@ -93,6 +129,6 @@ Route::middleware('auth:sanctum')->patch('/projects/{projectId}', function (Requ
     }
     else
     {
-        App::abort(403, "API user lacks 'update' permission");        
+        App::abort(403, "API user lacks 'update' permission");
     }
 });

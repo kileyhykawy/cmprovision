@@ -1,3 +1,10 @@
+cmprovision4 (1.4.1+nureva) UNRELEASED; urgency=medium
+
+  * Implement query strings for sorting and limiting cms APi routes
+  * Add beta route to be able to get latest provision results for each provisioning board.
+
+ -- Kiley Hykawy <kiley.hykawy@gmail.com>  Sat, 23 Apr 2022 18:05:23 -0600
+
 cmprovision4 (1.4+nureva) UNRELEASED; urgency=medium
 
   * Implement optional MAC address allocation
