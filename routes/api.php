@@ -11,24 +11,31 @@ use App\Models\Script;
 use App\Models\Label;
 use App\Http\Controllers\AddImageController;
 
-function cmsQuery(Request $request, Builder $query) {
-    $validatedData = $request->validate([
-        'limit' => 'integer|min:0',
-        'sort' => 'in:provisioning_started_at'
-    ]);
+/*
+ * Put protection around this to only load the helper function once. When running
+ * `artisan config:cache`, it tries to load this file multiple times and will
+ * return in `cmsError` already declared error is we don't do this.
+ */
+if (!function_exists('cmsQuery')) {
+    function cmsQuery(Request $request, Builder $query) {
+        $validatedData = $request->validate([
+            'limit' => 'integer|min:0',
+            'sort' => 'in:provisioning_started_at'
+        ]);
 
-    $limit = $validatedData['limit'] ?? null;
-    $sort = $validatedData['sort'] ?? null;
+        $limit = $validatedData['limit'] ?? null;
+        $sort = $validatedData['sort'] ?? null;
 
-    if ($limit) {
-        $query = $query->take($limit);
+        if ($limit) {
+            $query = $query->take($limit);
+        }
+        if ($sort) {
+            $query = $query->orderBy($sort);
+        }
+        $query = $query->orderBy('id');
+
+        return $query;
     }
-    if ($sort) {
-        $query = $query->orderBy($sort);
-    }
-    $query = $query->orderBy('id');
-
-    return $query;
 }
 
 /*
