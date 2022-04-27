@@ -20,17 +20,17 @@ if (!function_exists('cmsQuery')) {
     function cmsQuery(Request $request, Builder $query) {
         $validatedData = $request->validate([
             'limit' => 'integer|min:0',
-            'sort' => 'in:provisioning_started_at'
+            'sortDesc' => 'in:provisioning_started_at'
         ]);
 
         $limit = $validatedData['limit'] ?? null;
-        $sort = $validatedData['sort'] ?? null;
+        $sortDesc = $validatedData['sortDesc'] ?? null;
 
         if ($limit) {
             $query = $query->take($limit);
         }
-        if ($sort) {
-            $query = $query->orderBy($sort);
+        if ($sortDesc) {
+            $query = $query->orderBy($sortDesc, 'desc');
         }
         $query = $query->orderBy('id');
 
