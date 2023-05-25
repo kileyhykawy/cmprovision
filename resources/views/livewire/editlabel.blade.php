@@ -65,7 +65,7 @@
               <div class="mb-4">
                   <label for="template" class="block text-gray-700 text-sm font-bold mb-2">Label template:</label>
                   <textarea wrap="off" type="text" id="template" name="template" wire:model.defer="template" class="h-48 shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"></textarea>
-                  <small>Available variables:<br>$serial $mac $assigned_mac $provisionboard</small><br>
+                  <small>Available variables:<br>$serial $mac $assigned_mac $assigned_mac_uppernocolon $provisionboard</small><br>
                   @error('template') <span class="text-red-500">{{ $message }}</span>@enderror
               </div>
         </div>

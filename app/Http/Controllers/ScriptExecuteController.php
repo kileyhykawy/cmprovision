@@ -372,6 +372,9 @@ class ScriptExecuteController extends Controller
     {
         $labelsettings = $this->cm->project->label;
         $label = str_replace('$mac', $this->cm->mac, $labelsettings->template);
+        // This needs to be first before $assigned_mac so the variable itself is not replaced
+        $mac_uppernocolon = strtoupper(str_replace(':', '', $this->cm->assigned_mac));
+        $label = str_replace('$assigned_mac_uppernocolon', $mac_uppernocolon, $label);
         $label = str_replace('$assigned_mac', $this->cm->assigned_mac, $label);
         $label = str_replace('$serial', $this->serial, $label);
         $label = str_replace('$provisionboard', $this->cm->provisioning_board, $label);
