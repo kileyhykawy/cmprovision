@@ -8,8 +8,8 @@ use Illuminate\Database\Eloquent\Model;
 class Project extends Model
 {
     use HasFactory;
-    protected $fillable = ['name','device','storage','image_id','label_id','label_moment','eeprom_firmware','eeprom_settings','assign_mac'];
-    protected $casts = ['assign_mac' => 'boolean'];
+    protected $fillable = ['name','device','storage','image_id','label_id','label_moment','eeprom_firmware','eeprom_settings','verify','assign_mac'];
+    protected $casts = ['verify' => 'boolean','assign_mac' => 'boolean'];
 
     function image()
     {
@@ -35,7 +35,7 @@ class Project extends Model
     {
         return $this->hasMany(Mac::class);
     }
-    
+
     function isActive()
     {
         return $this->id == Project::getActiveId();
