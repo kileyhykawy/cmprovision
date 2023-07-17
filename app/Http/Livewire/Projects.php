@@ -10,13 +10,15 @@ use App\Models\Script;
 use App\Models\Setting;
 use App\Models\Firmware;
 use Illuminate\Support\Str;
+use App\Jobs\ComputeSHA256;
 
 class Projects extends Component
 {
     public $isOpen = false;
     public $active = true;
     public $projects, $activeProject;
-    public $projectid, $name, $device, $storage, $image_id, $label_id, $label_moment, $selectedScripts, $firmware, $eeprom_settings, $assign_mac;
+    public $projectid, $name, $device, $storage, $image_id, $label_id, $label_moment, $selectedScripts, $offerSettingsReset;
+    public $firmware, $eeprom_settings, $verify, $assign_mac;
     public $images, $labels, $scripts, $beta_firmware, $stable_firmware;
 
     protected $rules = [
@@ -29,7 +31,8 @@ class Projects extends Component
         'eeprom_settings' => 'nullable|max:2024',
         'label_moment' => 'required|in:never,preinstall,postinstall',
         'selectedScripts' => 'array',
-        'assign_mac' => 'required|boolean'      
+        'verify' => 'required|boolean',
+        'assign_mac' => 'required|boolean'
     ];
 
     public function render()
@@ -40,7 +43,7 @@ class Projects extends Component
         $this->labels = Label::orderBy('name')->get();
         $this->scripts = Script::orderBy('name')->get();
         $this->beta_firmware = Firmware::allOfChannel('beta');
-        $this->stable_firmware = Firmware::allOfChannel('stable');        
+        $this->stable_firmware = Firmware::allOfChannel('stable');
 
         if ($this->isOpen && $this->label_moment != 'never' && !$this->label_id && count($this->labels))
             $this->label_id = $this->labels[0]->id;
@@ -48,10 +51,41 @@ class Projects extends Component
         return view('livewire.projects');
     }
 
+    /* Called when EEPROM firmware selection changes */
+    public function updatingFirmware($newvalue)
+    {
+        if (!$newvalue)
+            return;
+
+        $oldDefaultSettings = $this->firmware ? $this->getEepromSettingsFromFirmwareFile($this->firmware) : '';
+        $newDefaultSettings = $this->getEepromSettingsFromFirmwareFile($newvalue);
+        $currentSettings = str_replace("\r", "", $this->eeprom_settings);
+
+        if ($currentSettings
+            && $currentSettings != $oldDefaultSettings
+            && $currentSettings != $newDefaultSettings)
+        {
+            /* Do not overwrite user's custom settings by default
+               do offer user option to 'reset settings' */
+            $this->offerSettingsReset = true;
+        }
+        else
+        {
+            $this->eeprom_settings = $newDefaultSettings;
+            $this->offerSettingsReset = false;
+        }
+    }
+
+    public function resetEEPROMsettings()
+    {
+        $this->eeprom_settings = $this->getEepromSettingsFromFirmwareFile($this->firmware);
+        $this->offerSettingsReset = false;
+    }
+
     public function openModal()
     {
         $this->resetErrorBag();
-        $this->resetValidation();        
+        $this->resetValidation();
         $this->isOpen = true;
     }
 
@@ -59,7 +93,7 @@ class Projects extends Component
     {
         $this->isOpen = false;
     }
-    
+
     public function delete($id)
     {
         Project::destroy($id);
@@ -75,15 +109,11 @@ class Projects extends Component
         $this->label_moment = 'never';
         $this->image_id = Image::max('id');
         $this->active = true;
-        $this->eeprom_settings = "[all]\nBOOT_UART=0\nWAKE_ON_GPIO=1\nPOWER_OFF_ON_HALT=0\n\n";
+        $this->verify = false;
+        $this->eeprom_settings = '';
+        $this->firmware = '';
+        $this->offerSettingsReset = false;
         $this->assign_mac = false;
-
-        /*if (count($this->stable_firmware))
-        {
-            $this->firmware = $this->stable_firmware[0]['path'];
-        }
-        else*/
-            $this->firmware = '';
 
         $this->openModal();
     }
@@ -98,6 +128,7 @@ class Projects extends Component
         $this->label_moment = $p->label_moment;
         $this->image_id = $p->image_id;
         $this->label_id = $p->label_id;
+        $this->verify = $p->verify;
         $this->active = $p->isActive();
         $this->selectedScripts = [];
         foreach ($p->scripts as $script)
@@ -106,6 +137,7 @@ class Projects extends Component
         }
         $this->firmware = $p->eeprom_firmware;
         $this->eeprom_settings = $p->eeprom_settings;
+        $this->offerSettingsReset = false;
         $this->assign_mac = $p->assign_mac;
         $this->openModal();
     }
@@ -123,6 +155,7 @@ class Projects extends Component
             'label_id' => $this->label_id ? $this->label_id : null,
             'eeprom_firmware' => $this->firmware ? $this->firmware : null,
             'eeprom_settings' => $this->eeprom_settings ? str_replace("\r", "", $this->eeprom_settings) : null,
+            'verify' => $this->verify,
             'assign_mac' => $this->assign_mac
         ]);
         $project->scripts()->sync($this->selectedScripts);
@@ -130,6 +163,12 @@ class Projects extends Component
         if ($this->active)
         {
             $this->setActive($project->id);
+        }
+
+        if ($this->verify && $this->image_id && !$project->image->uncompressed_sha256)
+        {
+            /* Queue SHA256 calculation job */
+            ComputeSHA256::dispatch($project->image);
         }
 
         $this->closeModal();
@@ -170,7 +209,7 @@ class Projects extends Component
             }
         }
 
-        
+
         //$updfile = base_path('scriptexecute/pieeprom.upd');
         /* Delete file created by previous CMprovision beta */
         $sigfile = base_path('scriptexecute/pieeprom.sig');
@@ -262,5 +301,56 @@ class Projects extends Component
         $data = substr($data, 0, $offset+4+$FILE_HDR_LEN).$settings.substr($data, $offset+4+$FILE_HDR_LEN+$MAX_BOOTCONF_SIZE);
 
         return true;
+    }
+
+    function getEepromSettingsFromFirmwareFile($fn)
+    {
+        $data = @file_get_contents(Firmware::basedir().'/'.$fn);
+        return $this->getEepromSettings($data);
+    }
+
+    function getEepromSettings(&$data)
+    {
+        $MAGIC = 0x55aaf00f;
+        $MAGIC_MASK = 0xfffff00f;
+        $FILE_MAGIC = 0x55aaf11f;
+        $FILE_HDR_LEN = 20;
+        $FILENAME_LEN = 12;
+        $MAX_BOOTCONF_SIZE = 2024;
+
+        $offset = $magic = $len = 0;
+        $found = false;
+
+        while ($offset+8 < strlen($data))
+        {
+            list($magic, $len) = array_values(unpack("Nmagic/Nlen", $data, $offset));
+            if (($magic & $MAGIC_MASK) != $MAGIC)
+            {
+                // EEPROM corrupt
+                return false;
+            }
+
+            if ($magic == $FILE_MAGIC)
+            {
+                if (Str::startsWith(substr($data, $offset+8, $FILE_HDR_LEN), "bootconf.txt\0"))
+                {
+                    $found = true;
+                    break;
+                }
+            }
+
+            $offset += 8 + $len;
+            $offset = ($offset + 7) & ~7;
+        }
+
+        if (!$found)
+            return false;
+
+        $datalen = $len - $FILENAME_LEN - 4;
+
+        if ($datalen < 0)
+            return false;
+
+        return substr($data, $offset+4+$FILE_HDR_LEN, $datalen);
     }
 }

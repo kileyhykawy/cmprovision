@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use App\Events\CmProvisioningComplete;
 use App\Models\Cm;
 use App\Models\Cmlog;
+use App\Models\EthernetSwitch;
 use App\Models\Project;
 use App\Models\Script;
 use App\Models\Setting;
@@ -34,10 +36,10 @@ class ScriptExecuteController extends Controller
         {
             return $this->registerLogFile($req);
         }
-        /*else if ($req->hasFile("eeprom_version"))
+        else if ($req->hasFile("eeprom_version"))
         {
             return $this->registerFirmware($req);
-        }*/
+        }
         else
         {
             return $this->startProvisoning($req);
@@ -48,8 +50,18 @@ class ScriptExecuteController extends Controller
     {
         $project = Project::getActive();
         $image   = $project ? $project->image : null;
+        $bootmode = $req->query('bootmode');
         $jumper  = $req->query('inversejumper');
-        if ($jumper)
+        $switchIpSetting = Setting::find('ethernetswitch_ip');
+        $switchCommunitySetting = Setting::find('ethernetswitch_snmp_community');
+
+        if ($switchIpSetting && $switchIpSetting->value && $req->query('mac')
+            && $switchCommunitySetting && $switchCommunitySetting->value)
+        {
+            $switch = new EthernetSwitch($switchIpSetting->value, $switchCommunitySetting->value);
+            $board = $switch->getPortNameByMac($req->query('mac'));
+        }
+        else if ($jumper)
         {
             // Inverse jumper bits
             for ($i=0; $i<strlen($jumper); $i++)
@@ -66,6 +78,7 @@ class ScriptExecuteController extends Controller
         {
             $memoryInGb = round( ($req->query("memorysize")+200000)/1024/1024 );
         }
+        $storage_bytes = $req->query('storagesize') ? $req->query('storagesize')*512 : null;
 
         $is_assigning_mac = ($project and $project->assign_mac);
         $assigned_mac = null;
@@ -112,11 +125,11 @@ class ScriptExecuteController extends Controller
         $this->cm = Cm::updateOrCreate(['serial' => $this->serial], [
             'serial' => $this->serial,
             'mac'    => $req->query('mac') ? $req->query('mac')
-                        : "MAC-PARAMETER-MISSING-".$this->serial,
+                        : "b8:27:eb:".substr($this->serial, -6, 2).":".substr($this->serial, -4, 2).":".substr($this->serial, -2, 2),
             'assigned_mac' => $assigned_mac,
             'model'  => $req->query('model'),
             'memory_in_gb' => $memoryInGb,
-            'storage' => $req->query('storagesize') ? $req->query('storagesize')*512 : null,
+            'storage' => $storage_bytes,
             'firmware' => $project ? $project->eeprom_firmware : null,
             'cid' => $req->query('cid'),
             'csd' => $req->query('csd'),
@@ -138,6 +151,32 @@ class ScriptExecuteController extends Controller
             $this->logInfo("Could not provision, because there is no active project", "error");
             return "echo 'No active project set in CMprovisioning'";
         }
+        if ($project->verify && $image)
+        {
+            if (!$image->uncompressed_sha256)
+            {
+                $this->logInfo("Verification enabled, but uncompressed SHA256 not computed yet, try again later...", "error");
+                return "echo 'Verification enabled, but uncompressed SHA256 not computed yet, try again later...'";
+            }
+            if ($image->uncompressed_size % 512 != 0)
+            {
+                $this->logInfo("Image is not a valid disk image. Uncompressed size not dividable by sector size of 512 bytes.", "error");
+                return "echo 'Image is not a valid disk image. Uncompressed size not dividable by sector size of 512 bytes.'";
+            }
+        }
+        if ($image && $project->storage == '/dev/mmcblk0')
+        {
+            if (!$storage_bytes)
+            {
+                $this->logInfo("Missing eMMC/SD card.", "error");
+                return "echo 'Missing eMMC/SD card.'";
+            }
+            if ($image->uncompressed_size && $storage_bytes < $image->uncompressed_size)
+            {
+                $this->logInfo("Image does not fit in storage. Uncompressed image size: ".$image->uncompressed_size." bytes. Available space: ".$storage_bytes." bytes.", "error");
+                return "echo 'Image does not fit in storage.'";
+            }
+        }
 
         $preinstall_scripts = $project->scripts()->where('script_type','preinstall')->orderBy('priority')->orderBy('id')->get();
         $postinstall_scripts = $project->scripts()->where('script_type','postinstall')->orderBy('priority')->orderBy('id')->get();
@@ -146,7 +185,7 @@ class ScriptExecuteController extends Controller
         if ($server[0] == '[')
         {
             // From the CM's side IPv6LL address will end in %usb0
-            $server = substr($this->server, 0, -1).'%usb0]';
+            $server = substr($server, 0, -1).'%usb0]';
         }
 
         if ($project->eeprom_firmware)
@@ -164,6 +203,27 @@ class ScriptExecuteController extends Controller
                              . "echo \"$eeprom_sha256  pieeprom.bin\" | sha256sum -c\n"
                              . 'flashrom -p "linux_spi:dev=/dev/spidev0.0,spispeed=16000" -w "pieeprom.bin"'."\n";
             $preinstall_scripts->prepend($fscript);
+        }
+
+        if ($project->verify && $image)
+        {
+            $fscript = new Script;
+            $fscript->id = 0;
+            $fscript->name = 'Verifying written image';
+            $fscript->bg = false;
+
+            if ($image->uncompressed_size % 1048576 == 0)
+                $ddline = "dd if=".$project->storage." bs=1M count=".($image->uncompressed_size / 1048576);
+            else
+                $ddline = "dd if=".$project->storage." count=".($image->uncompressed_size / 512);
+
+            $fscript->script = "#!/bin/sh\n"
+                             . "set -e\n"
+                             . "sync; echo 3 > /proc/sys/vm/drop_caches\n"
+                             . 'READ_SHA256=$('."$ddline | sha256sum | awk '{print $1}')\n"
+                             . 'echo Computed SHA256: "$READ_SHA256"'."\n"
+                             . 'if [ "$READ_SHA256" = "'.$image->uncompressed_sha256.'" ]; then echo Verification successful!; else echo Verification failed; exit 2; fi'."\n";
+            $postinstall_scripts->prepend($fscript);
         }
 
         $msg = "Provisioning started.";
@@ -213,6 +273,7 @@ class ScriptExecuteController extends Controller
             'assigned_mac' => $assigned_mac,
             'image_url' => $image ? "http://$server/uploads/".$image->filename_on_server : null,
             'image_extension' => $image ? $image->filename_extension : null,
+            'bootmode' => $bootmode,
             'preinstall_scripts' => $preinstall_scripts,
             'postinstall_scripts' => $postinstall_scripts
         ])->header('Content-Type', 'text/plain');
@@ -246,6 +307,10 @@ class ScriptExecuteController extends Controller
         $this->cm->save();
 
         $msg = 'Provisioning completed.';
+        if ($req->query('verify'))
+        {
+            $msg .= " Verification successful.";
+        }
         if ($project->label_moment == 'postinstall' && $project->label)
         {
             $msg .= " Printing label.";
@@ -256,6 +321,9 @@ class ScriptExecuteController extends Controller
         {
             $this->printLabel();
         }
+
+        // Emit event
+        CmProvisioningComplete::dispatch($this->cm);
 
         return "";
     }
@@ -324,14 +392,20 @@ class ScriptExecuteController extends Controller
         return "";
     }
 
-    /*
+
     public function registerFirmware(Request $req)
     {
         $this->cm = Cm::where('serial', $this->serial)->firstOrFail();
         $this->cm->firmware = $req->file('eeprom_version')->get();
+
+        $regs = [];
+        if (preg_match("/BUILD_TIMESTAMP=([0-9]+)/", $this->cm->firmware, $regs) )
+        {
+            /* If we only have a BUILD_TIMESTAMP, also convert it to a human friendly date/time string */
+            $this->cm->firmware .= date('r', $regs[1]);
+        }
         $this->cm->save();
     }
-    */
 
     public function preCMLogInfo($msg, $serial, $provisioning_board, $loglevel = 'info')
     {
