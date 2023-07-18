@@ -17,9 +17,8 @@
         "laravel/sanctum": "^2.6",
         "laravel/tinker": "^2.5",
         "livewire/livewire": "^2.0",
-        "phpunit/phpunit": "^9.6",
-        "maatwebsite/excel": "^3.1",
-        "phpoffice/phpspreadsheet": "^1.18"
+        "maatwebsite/excel": "3.1.33",
+        "phpunit/phpunit": "^9.6"
     },
     "require-dev": {
         "facade/ignition": "^2.5",
